@@ -35,3 +35,6 @@
 # build folders
 build/
 *.egg-info/
+
+# yhu
+ORBvoc.txt

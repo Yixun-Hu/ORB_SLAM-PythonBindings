@@ -99,25 +99,60 @@ def load_images(path_to_left, path_to_right, path_to_times_file):
 
 
 
+# def load_stereo_rectification(settings_path):
+#     settings = cv2.FileStorage(settings_path, cv2.FileStorage_READ)
+#     K_l = settings.getNode('LEFT.K').mat()
+#     K_r = settings.getNode('RIGHT.K').mat()
+#     P_l = settings.getNode('LEFT.P').mat()
+#     P_r = settings.getNode('RIGHT.P').mat()
+#     R_l = settings.getNode('LEFT.R').mat()
+#     R_r = settings.getNode('RIGHT.R').mat()
+#     D_l = settings.getNode('LEFT.D').mat()
+#     D_r = settings.getNode('RIGHT.D').mat()
+#     rows_l = int(settings.getNode('LEFT.height').real())
+#     cols_l = int(settings.getNode('LEFT.width').real())
+#     rows_r = int(settings.getNode('RIGHT.height').real())
+#     cols_r = int(settings.getNode('RIGHT.width').real())
+
+#     m1l, m2l = cv2.initUndistortRectifyMap(K_l, D_l, R_l, P_l[0:3, 0:3], (cols_l, rows_l), cv2.CV_32F)
+#     m1r, m2r = cv2.initUndistortRectifyMap(K_r, D_r, R_r, P_r[0:3, 0:3], (cols_r, rows_r), cv2.CV_32F)
+#     return m1l, m2l, m1r, m2r
+
 def load_stereo_rectification(settings_path):
     settings = cv2.FileStorage(settings_path, cv2.FileStorage_READ)
-    K_l = settings.getNode('LEFT.K').mat()
-    K_r = settings.getNode('RIGHT.K').mat()
-    P_l = settings.getNode('LEFT.P').mat()
-    P_r = settings.getNode('RIGHT.P').mat()
-    R_l = settings.getNode('LEFT.R').mat()
-    R_r = settings.getNode('RIGHT.R').mat()
-    D_l = settings.getNode('LEFT.D').mat()
-    D_r = settings.getNode('RIGHT.D').mat()
+    if not settings.isOpened():
+        raise IOError(f"Cannot open settings file: {settings_path}")
+
+    def show_node(name):
+        node = settings.getNode(name)
+        if node.empty():
+            print(f"[WARN] Node '{name}' is EMPTY")
+            return None
+        mat = node.mat()
+        print(f"[OK] Node '{name}' -> shape {None if mat is None else mat.shape}")
+        return mat
+
+    K_l = show_node('LEFT.K')
+    K_r = show_node('RIGHT.K')
+    P_l = show_node('LEFT.P')
+    P_r = show_node('RIGHT.P')
+    R_l = show_node('LEFT.R')
+    R_r = show_node('RIGHT.R')
+    D_l = show_node('LEFT.D')
+    D_r = show_node('RIGHT.D')
+
     rows_l = int(settings.getNode('LEFT.height').real())
     cols_l = int(settings.getNode('LEFT.width').real())
     rows_r = int(settings.getNode('RIGHT.height').real())
     cols_r = int(settings.getNode('RIGHT.width').real())
 
-    m1l, m2l = cv2.initUndistortRectifyMap(K_l, D_l, R_l, P_l[0:3, 0:3], (cols_l, rows_l), cv2.CV_32F)
-    m1r, m2r = cv2.initUndistortRectifyMap(K_r, D_r, R_r, P_r[0:3, 0:3], (cols_r, rows_r), cv2.CV_32F)
-    return m1l, m2l, m1r, m2r
+    settings.release()
 
+    m1l, m2l = cv2.initUndistortRectifyMap(K_l, D_l, R_l, P_l[0:3, 0:3],
+                                           (cols_l, rows_l), cv2.CV_32F)
+    m1r, m2r = cv2.initUndistortRectifyMap(K_r, D_r, R_r, P_r[0:3, 0:3],
+                                           (cols_r, rows_r), cv2.CV_32F)
+    return m1l, m2l, m1r, m2r
 
 def load_cv_mat(yaml_mat):
     return np.array(yaml_mat)
