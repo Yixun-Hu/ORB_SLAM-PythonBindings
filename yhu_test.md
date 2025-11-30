@@ -1,4 +1,5 @@
 # Run the pythonbinding of the orbslam3
+In the `examples` folder, run the following command to run the stereo euroc dataset.
 ```bash
 python orbslam_stereo_euroc.py \
   /home/prism-himalayas/codespace/ORB_SLAM3/Vocabulary/ORBvoc.txt \
@@ -24,3 +25,12 @@ ImportError: /home/prism-himalayas/miniconda3/envs/orbslam3_env/lib/python3.10/s
 ```
 Using `export LD_PRELOAD=/lib/aarch64-linux-gnu/libgomp.so.1:$LD_PRELOAD` to preload the cv2 module.
 
+When encounter this kind of problem:
+```bash
+Loading ORB Vocabulary. This could take a while...
+Segmentation fault (core dumped)
+```
+Use a new package of `conda install -c conda-forge opencv-python-headless`. Remember to first delete the old 
+
+# Logging
+- [2025/11/30] Still didn't solve the problem of `Segmentation fault (core dumped)`.

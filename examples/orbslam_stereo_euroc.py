@@ -18,7 +18,7 @@ def main(vocab_path, settings_path, path_to_left_folder, path_to_right_folder, p
     num_images = len(left_filenames)
 
     slam = orbslam3.System(vocab_path, settings_path, orbslam3.Sensor.STEREO)
-    slam.set_use_viewer(True)
+    slam.set_use_viewer(False)
     slam.initialize()
 
     times_track = [0 for _ in range(num_images)]
@@ -99,24 +99,112 @@ def load_images(path_to_left, path_to_right, path_to_times_file):
 
 
 
+# def load_stereo_rectification(settings_path):
+#     settings = cv2.FileStorage(settings_path, cv2.FileStorage_READ)
+#     K_l = settings.getNode('LEFT.K').mat()
+#     K_r = settings.getNode('RIGHT.K').mat()
+#     P_l = settings.getNode('LEFT.P').mat()
+#     P_r = settings.getNode('RIGHT.P').mat()
+#     R_l = settings.getNode('LEFT.R').mat()
+#     R_r = settings.getNode('RIGHT.R').mat()
+#     D_l = settings.getNode('LEFT.D').mat()
+#     D_r = settings.getNode('RIGHT.D').mat()
+#     rows_l = int(settings.getNode('LEFT.height').real())
+#     cols_l = int(settings.getNode('LEFT.width').real())
+#     rows_r = int(settings.getNode('RIGHT.height').real())
+#     cols_r = int(settings.getNode('RIGHT.width').real())
+
+#     m1l, m2l = cv2.initUndistortRectifyMap(K_l, D_l, R_l, P_l[0:3, 0:3], (cols_l, rows_l), cv2.CV_32F)
+#     m1r, m2r = cv2.initUndistortRectifyMap(K_r, D_r, R_r, P_r[0:3, 0:3], (cols_r, rows_r), cv2.CV_32F)
+#     return m1l, m2l, m1r, m2r
 def load_stereo_rectification(settings_path):
     settings = cv2.FileStorage(settings_path, cv2.FileStorage_READ)
-    K_l = settings.getNode('LEFT.K').mat()
-    K_r = settings.getNode('RIGHT.K').mat()
-    P_l = settings.getNode('LEFT.P').mat()
-    P_r = settings.getNode('RIGHT.P').mat()
-    R_l = settings.getNode('LEFT.R').mat()
-    R_r = settings.getNode('RIGHT.R').mat()
-    D_l = settings.getNode('LEFT.D').mat()
-    D_r = settings.getNode('RIGHT.D').mat()
-    rows_l = int(settings.getNode('LEFT.height').real())
-    cols_l = int(settings.getNode('LEFT.width').real())
-    rows_r = int(settings.getNode('RIGHT.height').real())
-    cols_r = int(settings.getNode('RIGHT.width').real())
+    if not settings.isOpened():
+        raise IOError(f"Cannot open settings file: {settings_path}")
 
-    m1l, m2l = cv2.initUndistortRectifyMap(K_l, D_l, R_l, P_l[0:3, 0:3], (cols_l, rows_l), cv2.CV_32F)
-    m1r, m2r = cv2.initUndistortRectifyMap(K_r, D_r, R_r, P_r[0:3, 0:3], (cols_r, rows_r), cv2.CV_32F)
+    # -----------------------------
+    # 1. 读左目（Camera1）内参 + 畸变
+    # -----------------------------
+    fx1 = settings.getNode("Camera1.fx").real()
+    fy1 = settings.getNode("Camera1.fy").real()
+    cx1 = settings.getNode("Camera1.cx").real()
+    cy1 = settings.getNode("Camera1.cy").real()
+
+    k1_1 = settings.getNode("Camera1.k1").real()
+    k2_1 = settings.getNode("Camera1.k2").real()
+    p1_1 = settings.getNode("Camera1.p1").real()
+    p2_1 = settings.getNode("Camera1.p2").real()
+
+    # -----------------------------
+    # 2. 读右目（Camera2）内参 + 畸变
+    # -----------------------------
+    fx2 = settings.getNode("Camera2.fx").real()
+    fy2 = settings.getNode("Camera2.fy").real()
+    cx2 = settings.getNode("Camera2.cx").real()
+    cy2 = settings.getNode("Camera2.cy").real()
+
+    k1_2 = settings.getNode("Camera2.k1").real()
+    k2_2 = settings.getNode("Camera2.k2").real()
+    p1_2 = settings.getNode("Camera2.p1").real()
+    p2_2 = settings.getNode("Camera2.p2").real()
+
+    # -----------------------------
+    # 3. 分辨率
+    # -----------------------------
+    width  = int(settings.getNode("Camera.width").real())
+    height = int(settings.getNode("Camera.height").real())
+
+    # -----------------------------
+    # 4. 左->右 相机外参 T_c1_c2
+    #    4x4 里左上 3x3 是 R，右边 3x1 是 t
+    # -----------------------------
+    T_c1_c2 = settings.getNode("Stereo.T_c1_c2").mat()
+    settings.release()
+
+    R = T_c1_c2[0:3, 0:3]
+    t = T_c1_c2[0:3, 3]
+
+    # -----------------------------
+    # 5. 构造 OpenCV 相机矩阵 / 畸变向量
+    # -----------------------------
+    K_l = np.array([[fx1, 0,   cx1],
+                    [0,   fy1, cy1],
+                    [0,   0,   1  ]], dtype=np.float64)
+    K_r = np.array([[fx2, 0,   cx2],
+                    [0,   fy2, cy2],
+                    [0,   0,   1  ]], dtype=np.float64)
+
+    # OpenCV 的畸变一般是 [k1, k2, p1, p2, k3]
+    # 你这份 yaml 没有 k3，就补个 0.0 上去
+    D_l = np.array([k1_1, k2_1, p1_1, p2_1, 0.0], dtype=np.float64)
+    D_r = np.array([k1_2, k2_2, p1_2, p2_2, 0.0], dtype=np.float64)
+
+    image_size = (width, height)
+
+    # -----------------------------
+    # 6. 使用 OpenCV stereoRectify 计算校正矩阵
+    # -----------------------------
+    R1, R2, P1, P2, Q, roi1, roi2 = cv2.stereoRectify(
+        K_l, D_l,
+        K_r, D_r,
+        image_size,
+        R, t,
+        flags=cv2.CALIB_ZERO_DISPARITY,
+        alpha=0  # 0 = 裁剪到有效区域，1 = 尽量保留全部视野
+    )
+
+    # -----------------------------
+    # 7. 生成左右目的 undistort + rectify map
+    # -----------------------------
+    m1l, m2l = cv2.initUndistortRectifyMap(
+        K_l, D_l, R1, P1, image_size, cv2.CV_32F
+    )
+    m1r, m2r = cv2.initUndistortRectifyMap(
+        K_r, D_r, R2, P2, image_size, cv2.CV_32F
+    )
+
     return m1l, m2l, m1r, m2r
+
 
 # def load_stereo_rectification(settings_path):
 #     settings = cv2.FileStorage(settings_path, cv2.FileStorage_READ)
