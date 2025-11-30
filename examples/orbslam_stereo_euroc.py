@@ -70,17 +70,33 @@ def main(vocab_path, settings_path, path_to_left_folder, path_to_right_folder, p
     return 0
 
 
+# def load_images(path_to_left, path_to_right, path_to_times_file):
+#     left_files = []
+#     right_files = []
+#     timestamps = []
+#     with open(path_to_times_file) as times_file:
+#         for line in times_file:
+#             line = line.rstrip()
+#             timestamps.append(float(line) / 1e9)
+#             left_files.append(os.path.join(path_to_left, "{0}.png".format(line)))
+#             right_files.append(os.path.join(path_to_right, "{0}.png".format(line)))
+#     return left_files, right_files, timestamps
 def load_images(path_to_left, path_to_right, path_to_times_file):
     left_files = []
     right_files = []
     timestamps = []
     with open(path_to_times_file) as times_file:
         for line in times_file:
-            line = line.rstrip()
-            timestamps.append(float(line) / 1e9)
-            left_files.append(os.path.join(path_to_left, "{0}.png".format(line)))
-            right_files.append(os.path.join(path_to_right, "{0}.png".format(line)))
+            line = line.strip()
+            if not line or line[0] == '#':
+                continue
+            ts_str, filename = line.split(',')  # CSV: timestamp,filename
+            ts = float(ts_str) / 1e9
+            timestamps.append(ts)
+            left_files.append(os.path.join(path_to_left, filename))
+            right_files.append(os.path.join(path_to_right, filename))
     return left_files, right_files, timestamps
+
 
 
 def load_stereo_rectification(settings_path):
