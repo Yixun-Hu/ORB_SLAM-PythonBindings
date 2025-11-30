@@ -37,4 +37,4 @@ build/
 *.egg-info/
 
 # yhu
-ORBvoc.txt
+Vocabulary/ORBvoc.txt
